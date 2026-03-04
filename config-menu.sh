@@ -4621,8 +4621,29 @@ run_auto_fix_openclaw_cmd() {
     "$AUTO_FIX_OPENCLAW_BIN" "$@"
 }
 
+check_codex_ready() {
+    if ! command -v codex &> /dev/null; then
+        log_error "未检测到 codex CLI。请先安装 Codex CLI。"
+        echo "  安装后执行: codex login"
+        return 1
+    fi
+
+    if ! codex login status > /dev/null 2>&1; then
+        log_error "Codex CLI 未完成登录配置。"
+        echo "  请先执行: codex login"
+        return 1
+    fi
+
+    return 0
+}
+
 run_auto_fix_provider_repair() {
     local provider="$1"
+
+    # AI 修复统一要求：Codex 已安装且已登录（作为主修复/兜底引擎）
+    if ! check_codex_ready; then
+        return 1
+    fi
 
     if ! check_openclaw_installed; then
         log_error "OpenClaw 未安装，无法执行修复"
@@ -4650,6 +4671,7 @@ run_auto_fix_provider_repair() {
     fi
 
     echo ""
+    log_info "将自动读取错误日志摘要，并向 ${provider} CLI 发起修复请求..."
     log_info "执行修复: auto-fix-openclaw repair-now --provider $provider"
     if [ -n "$force_flag" ]; then
         run_auto_fix_openclaw_cmd repair-now --provider "$provider" --source installer-menu "$force_flag"
@@ -4696,6 +4718,8 @@ ai_auto_fix_menu() {
     echo -e "${GRAY}集成 auto-fix-openclaw，可调用 Codex/Claude CLI 执行修复${NC}"
     echo -e "${GRAY}仓库: ${AUTO_FIX_OPENCLAW_REPO_URL}${NC}"
     echo -e "${GRAY}路径: ${AUTO_FIX_OPENCLAW_DIR}${NC}"
+    echo -e "${YELLOW}前置要求: 已安装并配置 Codex CLI（codex login）。${NC}"
+    echo -e "${GRAY}执行 AI 修复时会自动读取错误日志摘要并发送修复请求。${NC}"
     echo ""
 
     print_menu_item "1" "同步/安装 auto-fix-openclaw" "📦"

@@ -197,6 +197,11 @@ bash ./config-menu.sh
 - `[8]` 高级设置（升级、备份、恢复）
 - `[8]` 高级设置 → `[8]` AI 自动修复 OpenClaw（集成 `auto-fix-openclaw`，支持 Codex/Claude CLI）
 
+AI 自动修复前置要求：
+
+- 已安装并登录 Codex CLI（`codex login`）。
+- 启动 AI 修复后，系统会自动读取错误日志摘要并向所选 CLI 发起修复请求。
+
 ### 3) 典型配置流程（建议）
 
 1. 先配 AI 模型（并测试 API）。
