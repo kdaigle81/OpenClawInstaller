@@ -2,7 +2,8 @@
 #
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║                                                                           ║
-# ║   🦞 OpenClaw 一键部署脚本 v1.0.0                                          ║
+# ║   🦞 OpenClaw 一键部署脚本 v1.0.5                                          ║
+# ║   🔥 Dasheng Brand: Monkey King's Wrath                                   ║
 # ║   智能 AI 助手部署工具 - 支持多平台多模型                                    ║
 # ║                                                                           ║
 # ║   GitHub: https://github.com/leecyno1/auto-install-Openclaw               ║
@@ -67,6 +68,9 @@ CONFIG_DIR="$HOME/.openclaw"
 MIN_NODE_MAJOR=22
 MIN_NODE_MINOR=12
 INSTALLER_NAME="auto-install-Openclaw"
+INSTALLER_VERSION="1.0.5"
+BRAND_NAME="Monkey King's Wrath"
+BRAND_CN_NAME="大圣引擎"
 GITHUB_REPO="${GITHUB_REPO:-leecyno1/auto-install-Openclaw}"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 OFFICIAL_INSTALL_URL="https://openclaw.ai/install.sh"
@@ -91,17 +95,22 @@ HELP=0
 print_banner() {
     echo -e "${CYAN}"
     cat << 'EOF'
+                              .-"""-.
+                             / .===. \\
+                             \\/ 6 6 \\/
+                             ( \\___/ )
+___  ___  ___  _   _ _____    ___\\_/___    _      ___  _       ___  _    _
+|  \\/  | / _ \\| \\ | |  __ \\  / _ \\_/ _ \\  | |    / _ \\| |     / _ \\| |  | |
+| .  . |/ /_\\ \\  \\| | |  \\/ / /_\\   /_\\ \\ | |   / /_\\ \\ |    / /_\\ \\ |  | |
+| |\\/| ||  _  | . ` | | __  |  _  |  _  | | |   |  _  | |    |  _  | |/\\| |
+| |  | || | | | |\\  | |_\\ \\ | | | | | | | | |___| | | | |____| | | \\  /\\  /
+\\_|  |_/\\_| |_/\\_| \\_/\\____/ \\_| |_|_| |_| \\_____/\\_| |_/\\_____/\\_| |_|\\/\\/
     
-     ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗██╗      █████╗ ██╗    ██╗
-    ██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██║     ██╔══██╗██║    ██║
-    ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██║     ██║     ███████║██║ █╗ ██║
-    ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║     ██║     ██╔══██║██║███╗██║
-    ╚██████╔╝██║     ███████╗██║ ╚████║╚██████╗███████╗██║  ██║╚███╔███╔╝
-     ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝   
-                                                                         
-              🦞 智能 AI 助手一键部署工具 v1.0.0 🦞
+              🔥 大圣之怒智能AI助手 🔥
+               🔥 Monkey King's Wrath · 大圣引擎 🔥
     
 EOF
+    echo "              🔖 Version: v${INSTALLER_VERSION}"
     echo -e "${NC}"
 }
 
@@ -1849,6 +1858,9 @@ main() {
     normalize_install_options
 
     print_banner
+    echo -e "${RED}Brand:${NC} ${BRAND_NAME} (${BRAND_CN_NAME})"
+    echo -e "${GRAY}Logo: photo/dasheng-brand-logo.svg${NC}"
+    echo ""
     print_install_plan
     
     echo -e "${YELLOW}⚠️  警告: OpenClaw 需要完全的计算机权限${NC}"

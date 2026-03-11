@@ -19,7 +19,13 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.1.0-blue.svg" alt="Version">
+  <img src="photo/dasheng-brand-logo.svg" alt="Monkey King's Wrath Brand Logo" width="320" />
+</p>
+
+<p align="center"><strong>Dasheng Brand: Monkey King's Wrath (大圣引擎)</strong></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-1.0.5-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Node.js-22%2B-brightgreen.svg" alt="Node">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
