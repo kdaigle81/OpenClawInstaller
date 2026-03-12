@@ -75,6 +75,9 @@ OPENCLAW_BIN_RESOLVED=""
 
 # 飞书插件策略（仅官方插件，支持版本 pin）
 FEISHU_PLUGIN_OFFICIAL="@openclaw/feishu"
+# QQ 社区插件策略（可选，不默认）
+QQ_PLUGIN_COMMUNITY="@sliverp/qqbot"
+QQ_PLUGIN_VERSION_DEFAULT="${OPENCLAW_QQ_PLUGIN_VERSION:-1.5.4}"
 INSTALLER_REPO="leecyno1/auto-install-Openclaw"
 INSTALLER_RAW_URL="https://raw.githubusercontent.com/${INSTALLER_REPO}/main"
 AUTO_FIX_OPENCLAW_REPO_URL="${AUTO_FIX_OPENCLAW_REPO_URL:-https://github.com/leecyno1/auto-fix-openclaw.git}"
@@ -248,6 +251,146 @@ PYEOF
         log_error "更新 plugins.allow 失败"
         return 1
     fi
+}
+
+# 从 plugins.allow / plugins.entries / channels 中移除插件
+remove_plugin_from_allow() {
+    local plugin_id="$1"
+
+    if [ ! -f "$OPENCLAW_JSON" ]; then
+        log_warn "配置文件不存在: $OPENCLAW_JSON"
+        return 1
+    fi
+
+    if ! command -v jq &> /dev/null; then
+        python3 << PYEOF
+import json
+import os
+
+config_path = os.path.expanduser("$OPENCLAW_JSON")
+plugin_id = "$plugin_id"
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    plugins = config.get('plugins', {})
+    allow = plugins.get('allow', [])
+    if isinstance(allow, list):
+        plugins['allow'] = [p for p in allow if p != plugin_id]
+
+    entries = plugins.get('entries', {})
+    if isinstance(entries, dict) and plugin_id in entries:
+        entries.pop(plugin_id, None)
+        plugins['entries'] = entries
+
+    config['plugins'] = plugins
+
+    channels = config.get('channels', {})
+    if isinstance(channels, dict):
+        channels.pop(plugin_id, None)
+        config['channels'] = channels
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+except Exception as e:
+    print(f"更新配置失败: {e}")
+    exit(1)
+PYEOF
+        return $?
+    fi
+
+    local tmp_file
+    tmp_file=$(mktemp)
+    jq --arg plugin "$plugin_id" '
+        .plugins //= {"allow": [], "entries": {}} |
+        .plugins.allow = ((.plugins.allow // []) | map(select(. != $plugin))) |
+        .plugins.entries = ((.plugins.entries // {}) | del(.[$plugin])) |
+        .channels = ((.channels // {}) | del(.[$plugin]))
+    ' "$OPENCLAW_JSON" > "$tmp_file"
+
+    if [ $? -eq 0 ] && [ -s "$tmp_file" ]; then
+        mv "$tmp_file" "$OPENCLAW_JSON"
+        log_info "已清理 $plugin_id 在本地配置中的残留"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_error "清理 $plugin_id 配置残留失败"
+    return 1
+}
+
+# 将逗号分隔字符串转换为 JSON 数组
+build_json_array_from_csv() {
+    local csv="$1"
+    local json="["
+    local count=0
+    local item=""
+    local trimmed=""
+    local escaped=""
+
+    IFS=',' read -r -a __csv_items <<< "$csv"
+    for item in "${__csv_items[@]}"; do
+        trimmed="$(echo "$item" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        [ -n "$trimmed" ] || continue
+        escaped="${trimmed//\\/\\\\}"
+        escaped="${escaped//\"/\\\"}"
+        if [ $count -gt 0 ]; then
+            json+=","
+        fi
+        json+="\"$escaped\""
+        count=$((count + 1))
+    done
+
+    json+="]"
+    echo "$json"
+}
+
+# 直接写入 channels.<channel>.allowFrom，确保数组类型准确
+set_channel_allow_from_json() {
+    local channel="$1"
+    local allow_json="$2"
+
+    if [ ! -f "$OPENCLAW_JSON" ]; then
+        openclaw config set "channels.${channel}.allowFrom" "$allow_json" > /dev/null 2>&1
+        return $?
+    fi
+
+    if ! command -v jq &> /dev/null; then
+        python3 << PYEOF
+import json
+import os
+
+config_path = os.path.expanduser("$OPENCLAW_JSON")
+channel = "$channel"
+allow_from = json.loads('''$allow_json''')
+
+with open(config_path, 'r') as f:
+    cfg = json.load(f)
+cfg.setdefault('channels', {})
+cfg['channels'].setdefault(channel, {})
+cfg['channels'][channel]['allowFrom'] = allow_from
+with open(config_path, 'w') as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
+PYEOF
+        return $?
+    fi
+
+    local tmp_file
+    tmp_file=$(mktemp)
+    jq --arg channel "$channel" --argjson allow "$allow_json" '
+        .channels //= {} |
+        .channels[$channel] //= {} |
+        .channels[$channel].allowFrom = $allow
+    ' "$OPENCLAW_JSON" > "$tmp_file"
+
+    if [ $? -eq 0 ] && [ -s "$tmp_file" ]; then
+        mv "$tmp_file" "$OPENCLAW_JSON"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    return 1
 }
 
 # 从环境变量文件读取配置
@@ -2923,10 +3066,11 @@ config_channels() {
     print_menu_item "14" "钉钉/QQ/企业微信 官方状态检查" "🧾"
     print_menu_item "15" "微信（社区/旧版，非官方）" "🟢"
     print_menu_item "16" "iMessage（旧版）" "🍎"
+    print_menu_item "17" "QQ（社区插件，可选）" "🐧"
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    echo -en "${YELLOW}请选择 [0-16]: ${NC}"
+    echo -en "${YELLOW}请选择 [0-17]: ${NC}"
     read choice < "$TTY_INPUT"
     
     case $choice in
@@ -2946,6 +3090,7 @@ config_channels() {
         14) check_cn_enterprise_channel_official_status ;;
         15) config_wechat ;;
         16) config_imessage ;;
+        17) config_qq_community ;;
         0) return ;;
         *) log_error "无效选择"; press_enter; config_channels ;;
     esac
@@ -3366,6 +3511,9 @@ check_cn_enterprise_channel_official_status() {
     echo -e "  • QQ: ${YELLOW}当前未发现官方插件${NC}"
     echo -e "  • 企业微信（WeCom）: ${YELLOW}当前未发现官方插件${NC}"
     echo ""
+    echo -e "${CYAN}可选社区方案（非官方，需自行评估风险）:${NC}"
+    echo "  • QQ: @sliverp/qqbot（本菜单提供安装/探针/回滚）"
+    echo ""
     echo -e "${CYAN}已纳入的官方企业渠道替代项:${NC}"
     echo "  • 飞书（Feishu）"
     echo "  • Microsoft Teams（插件）"
@@ -3375,6 +3523,229 @@ check_cn_enterprise_channel_official_status() {
     echo ""
     echo -e "${YELLOW}说明:${NC} 为避免与官方能力漂移，本安装器仅默认纳入已发布的官方渠道插件。"
     echo ""
+    press_enter
+}
+
+probe_qq_community_config() {
+    echo ""
+    echo -e "${CYAN}━━━ QQ 社区插件探针 ━━━${NC}"
+
+    if ! check_openclaw_installed; then
+        log_error "OpenClaw 未安装，无法探针"
+        return 1
+    fi
+
+    local plugin_ok=false
+    local channel_ok=false
+    local allow_value=""
+
+    if openclaw plugins list 2>/dev/null | grep -qi "qqbot"; then
+        plugin_ok=true
+        log_info "qqbot 插件已安装"
+    else
+        log_warn "qqbot 插件未在 plugins list 中出现"
+    fi
+
+    if openclaw channels list 2>/dev/null | grep -qi "qqbot"; then
+        channel_ok=true
+        log_info "qqbot 渠道已注册"
+    else
+        log_warn "qqbot 渠道未在 channels list 中出现"
+    fi
+
+    allow_value="$(openclaw config get channels.qqbot.allowFrom 2>/dev/null || true)"
+    if [ -n "$allow_value" ] && [ "$allow_value" != "undefined" ]; then
+        echo -e "${CYAN}allowFrom:${NC} ${WHITE}$allow_value${NC}"
+        if echo "$allow_value" | grep -q '\*'; then
+            log_warn "当前 allowFrom 包含 *，表示允许所有来源"
+        fi
+    else
+        log_warn "未检测到 channels.qqbot.allowFrom（插件默认可能为允许全部）"
+    fi
+
+    echo ""
+    echo -e "${CYAN}诊断输出:${NC}"
+    if openclaw plugins --help 2>/dev/null | grep -q "doctor"; then
+        openclaw plugins doctor 2>&1 | head -10 | sed 's/^/  /'
+    else
+        openclaw doctor 2>&1 | head -10 | sed 's/^/  /'
+    fi
+
+    if [ "$plugin_ok" = true ] && [ "$channel_ok" = true ]; then
+        log_info "QQ 社区配置探针通过"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}排障建议:${NC}"
+    echo "  1) openclaw doctor --fix"
+    echo "  2) openclaw plugins update --all"
+    echo "  3) 重新执行 QQ 社区配置向导"
+    return 1
+}
+
+rollback_qq_community_config() {
+    echo ""
+    echo -e "${WHITE}♻️ 回滚 QQ 社区配置${NC}"
+    print_divider
+    echo ""
+    echo -e "${YELLOW}将执行:${NC}"
+    echo "  • 禁用 qqbot 插件"
+    echo "  • 卸载 qqbot 插件（保留插件文件）"
+    echo "  • 清理 channels.qqbot 与 plugins.allow 中的 qqbot"
+    echo ""
+
+    if ! confirm "确认执行回滚？" "n"; then
+        log_info "已取消回滚"
+        return 0
+    fi
+
+    openclaw plugins disable qqbot > /dev/null 2>&1 || true
+    openclaw plugins uninstall qqbot --keep-files > /dev/null 2>&1 || true
+
+    if openclaw config --help 2>/dev/null | grep -q "unset"; then
+        openclaw config unset channels.qqbot > /dev/null 2>&1 || true
+        openclaw config unset plugins.entries.qqbot > /dev/null 2>&1 || true
+    else
+        openclaw config set channels.qqbot.enabled false > /dev/null 2>&1 || true
+        openclaw config set channels.qqbot.allowFrom "[]" > /dev/null 2>&1 || true
+    fi
+
+    remove_plugin_from_allow "qqbot" || true
+    log_info "QQ 社区配置回滚完成"
+
+    if confirm "是否重启 Gateway 使回滚生效？" "y"; then
+        restart_gateway_for_channel
+    fi
+    return 0
+}
+
+config_qq_community_setup() {
+    if ! check_openclaw_installed; then
+        log_error "OpenClaw 未安装"
+        return 1
+    fi
+
+    ensure_openclaw_init
+
+    local plugin_version="${OPENCLAW_QQ_PLUGIN_VERSION:-$QQ_PLUGIN_VERSION_DEFAULT}"
+    local plugin_spec="${QQ_PLUGIN_COMMUNITY}@${plugin_version}"
+    local app_id=""
+    local app_secret=""
+    local allow_input=""
+    local allow_json=""
+
+    echo -e "${YELLOW}⚠️ 风险提示:${NC}"
+    echo "  • QQ 当前不是官方渠道，依赖社区插件"
+    echo "  • 仅建议用于测试或内部环境，生产环境请评估安全风险"
+    echo "  • 本安装器会固定版本安装，避免 latest 漂移"
+    echo ""
+
+    if ! confirm "继续安装并配置 QQ 社区插件？" "n"; then
+        log_info "已取消 QQ 配置"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}安装插件: ${WHITE}${plugin_spec}${NC}"
+    if openclaw plugins install "$plugin_spec" --pin; then
+        log_info "QQ 社区插件安装成功"
+    else
+        log_warn "插件安装失败，尝试继续使用已安装版本"
+        if ! openclaw plugins list 2>/dev/null | grep -qi "qqbot"; then
+            log_error "未检测到 qqbot 已安装，无法继续"
+            return 1
+        fi
+    fi
+
+    openclaw plugins enable qqbot > /dev/null 2>&1 || true
+    ensure_plugin_in_allow "qqbot"
+
+    echo ""
+    echo -e "${CYAN}请输入 QQ 机器人凭据（官方 Bot 平台）${NC}"
+    read_input "${YELLOW}AppID: ${NC}" app_id
+    read_secret_input "${YELLOW}AppSecret: ${NC}" app_secret
+    if [ -z "$app_id" ] || [ -z "$app_secret" ]; then
+        log_error "AppID / AppSecret 不能为空"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${YELLOW}注册 QQ 渠道...${NC}"
+    local add_output=""
+    add_output="$(openclaw channels add --channel qqbot --token "${app_id}:${app_secret}" 2>&1)"
+    local add_exit=$?
+    echo "$add_output" | grep -v "^🦞" | grep -v "^$" | head -5
+    if [ $add_exit -ne 0 ]; then
+        log_warn "QQ 渠道可能已存在或注册失败，继续写入 allowFrom"
+    fi
+
+    echo ""
+    echo -e "${CYAN}来源白名单（allowFrom）配置:${NC}"
+    echo "  • 输入格式: 12345,67890"
+    echo "  • 留空表示允许所有来源（高风险）"
+    read_input "${YELLOW}请输入允许来源（可留空）: ${NC}" allow_input
+
+    if [ -n "$allow_input" ]; then
+        allow_json="$(build_json_array_from_csv "$allow_input")"
+        if [ "$allow_json" = "[]" ]; then
+            log_error "allowFrom 解析后为空，请重新输入"
+            return 1
+        fi
+        if set_channel_allow_from_json "qqbot" "$allow_json"; then
+            log_info "已设置 allowFrom: $allow_json"
+        else
+            log_error "写入 allowFrom 失败"
+            return 1
+        fi
+    else
+        if confirm "未设置白名单将允许所有来源（[\"*\"]），确认继续？" "n"; then
+            if set_channel_allow_from_json "qqbot" "[\"*\"]"; then
+                log_warn "已设置 allowFrom 为 [\"*\"]（允许全部来源）"
+            else
+                log_error "写入 allowFrom 失败"
+                return 1
+            fi
+        else
+            log_info "已取消保存 QQ 配置"
+            return 1
+        fi
+    fi
+
+    openclaw config set channels.qqbot.enabled true > /dev/null 2>&1 || true
+    log_info "QQ 社区渠道配置完成"
+
+    if confirm "是否立即执行 QQ 配置探针？" "y"; then
+        probe_qq_community_config || true
+    fi
+
+    if confirm "是否重启 Gateway 使配置生效？" "y"; then
+        restart_gateway_for_channel
+    fi
+
+    return 0
+}
+
+config_qq_community() {
+    clear_screen
+    print_header
+    echo -e "${WHITE}🐧 QQ（社区插件，可选）${NC}"
+    print_divider
+    echo ""
+    echo "  1) 安装并配置 QQ 社区插件"
+    echo "  2) QQ 配置探针检查"
+    echo "  3) 回滚 QQ 社区配置"
+    echo "  0) 返回"
+    echo ""
+    read_input "${YELLOW}请选择 [0-3]: ${NC}" qq_choice
+
+    case "$qq_choice" in
+        1) config_qq_community_setup ;;
+        2) probe_qq_community_config ;;
+        3) rollback_qq_community_config ;;
+        0) return ;;
+        *) log_error "无效选择" ;;
+    esac
     press_enter
 }
 
