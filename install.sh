@@ -1505,6 +1505,7 @@ EOF
         novita)
             echo "export NOVITA_API_KEY=$AI_KEY" >> "$env_file"
             echo "export NOVITA_BASE_URL=${BASE_URL:-https://api.novita.ai/openai}" >> "$env_file"
+            ;;
         xai)
             echo "export XAI_API_KEY=$AI_KEY" >> "$env_file"
             ;;
@@ -1581,6 +1582,7 @@ EOF
                     ;;
                 novita)
                     openclaw_model="novita/$AI_MODEL"
+                    ;;
                 xai)
                     openclaw_model="xai/$AI_MODEL"
                     ;;
@@ -2084,16 +2086,6 @@ setup_ai_provider() {
     echo "  7) ⚡ Groq (超快推理)"
     echo "  8) 🌬️ Mistral AI"
     echo "  9) 🟠 Ollama (本地模型)"
-    echo "  10) 🚀 Novita AI (Kimi/DeepSeek/GLM)"
-    echo "  1)  🟣 Anthropic Claude"
-    echo "  2)  🟢 OpenAI GPT"
-    echo "  3)  🔵 DeepSeek"
-    echo "  4)  🌙 Kimi (Moonshot)"
-    echo "  5)  🔴 Google Gemini"
-    echo "  6)  🔄 OpenRouter (多模型网关)"
-    echo "  7)  ⚡ Groq (超快推理)"
-    echo "  8)  🌬️ Mistral AI"
-    echo "  9)  🟠 Ollama (本地模型)"
     echo "  10) 𝕏 xAI Grok"
     echo "  11) 🇨🇳 智谱 GLM (Zai)"
     echo "  12) 🤖 MiniMax"
@@ -2101,6 +2093,7 @@ setup_ai_provider() {
     echo "  14) ☁️ Azure OpenAI"
     echo "  15) 🧪 Google Gemini CLI"
     echo "  16) 🚀 Google Antigravity"
+    echo "  17) 🚀 Novita AI (Kimi/DeepSeek/GLM)"
     echo ""
     echo -e "${GRAY}说明:${NC}"
     echo -e "${GRAY}  • 本安装向导提供官方常用提供商的快速入口（与官方文档对齐的精简集）${NC}"
@@ -2109,7 +2102,7 @@ setup_ai_provider() {
     echo -e "${GRAY}  • 官方模型文档: https://docs.openclaw.ai/providers/models${NC}"
     echo -e "${GRAY}  • 支持自定义 API 地址（通过 openclaw.json 配置自定义 Provider）${NC}"
     echo ""
-    echo -en "${YELLOW}请选择 AI 提供商 [1-16] (默认: 1): ${NC}"; read ai_choice < "$TTY_INPUT"
+    echo -en "${YELLOW}请选择 AI 提供商 [1-17] (默认: 1): ${NC}"; read ai_choice < "$TTY_INPUT"
     ai_choice=${ai_choice:-1}
     
     case $ai_choice in
@@ -2349,6 +2342,26 @@ setup_ai_provider() {
             esac
             ;;
         10)
+            AI_PROVIDER="xai"
+            BASE_URL=""
+            echo ""
+            echo -e "${CYAN}配置 xAI Grok${NC}"
+            echo -e "${GRAY}获取 API Key: https://console.x.ai/${NC}"
+            echo ""
+            read_secret_input "${YELLOW}输入 API Key: ${NC}" AI_KEY
+            echo ""
+            echo "选择模型:"
+            echo "  1) grok-4 (推荐, 官方默认)"
+            echo "  2) grok-4-fast"
+            echo "  3) 自定义模型名称"
+            echo -en "${YELLOW}选择模型 [1-3] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
+            case $model_choice in
+                2) AI_MODEL="grok-4-fast" ;;
+                3) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
+                *) AI_MODEL="grok-4" ;;
+            esac
+            ;;
+        17)
             AI_PROVIDER="novita"
             echo ""
             echo -e "${CYAN}配置 Novita AI${NC}"
@@ -2368,23 +2381,6 @@ setup_ai_provider() {
                 3) AI_MODEL="zai-org/glm-5" ;;
                 4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
                 *) AI_MODEL="moonshotai/kimi-k2.5" ;;
-            AI_PROVIDER="xai"
-            BASE_URL=""
-            echo ""
-            echo -e "${CYAN}配置 xAI Grok${NC}"
-            echo -e "${GRAY}获取 API Key: https://console.x.ai/${NC}"
-            echo ""
-            read_secret_input "${YELLOW}输入 API Key: ${NC}" AI_KEY
-            echo ""
-            echo "选择模型:"
-            echo "  1) grok-4 (推荐, 官方默认)"
-            echo "  2) grok-4-fast"
-            echo "  3) 自定义模型名称"
-            echo -en "${YELLOW}选择模型 [1-3] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
-            case $model_choice in
-                2) AI_MODEL="grok-4-fast" ;;
-                3) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
-                *) AI_MODEL="grok-4" ;;
             esac
             ;;
         11)
